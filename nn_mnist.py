@@ -13,26 +13,28 @@ from tqdm import tqdm
 
 torch.manual_seed(2)
 
-class CnnNet(nn.Module):
+# 定义模型
+class NnNet(nn.Module):
    def __init__(self):
       super().__init__()
-      self.conv1 = nn.Conv2d(1,10,kernel_size=5,stride=1)
-      self.conv2 = nn.Conv2d(10,10,kernel_size=5,stride=1)
-      self.pool = nn.MaxPool2d(kernel_size=2,stride=2) #2x2 maxpool
-      self.fc1 = nn.Linear(4*4*10,100)
-      self.fc2 = nn.Linear(100,10)
-  
-   def forward(self,x):
-      x = F.relu(self.conv1(x)) #24x24x10
-      x = self.pool(x) #12x12x10
-      x = F.relu(self.conv2(x)) #8x8x10
-      x = self.pool(x) #4x4x10    
-      x = x.view(-1, 4*4*10) #flattening
-      x = F.relu(self.fc1(x))
-      x = self.fc2(x)
-      return x
+      self.linear1 = nn.Linear(784, 250)  # 输入 784，输出 250
+      self.bn1 = nn.BatchNorm1d(250)
+      self.linear2 = nn.Linear(250, 100)  # 输入 250，输出 100
+      self.bn2 = nn.BatchNorm1d(100)
+      self.linear3 = nn.Linear(100, 10)   # 输入 100，输出 10
 
-train_ds = datasets.MNIST('data',train=True,download=True, transform=transforms.Compose([transforms.ToTensor()]))
+   def forward(self, X):
+      # X = F.relu(self.linear1(X))  # 第一层 + ReLU 激活
+      X = F.relu(self.bn1(self.linear1(X)))
+      #X = F.relu(self.linear2(X))  # 第二层 + ReLU 激活
+      X = F.relu(self.bn2(self.linear2(X)))
+      X = self.linear3(X)          # 第三层（无激活函数）
+      return X
+
+
+train_ds = datasets.MNIST('data',train=True,download=True, transform=transforms.Compose(
+   [transforms.ToTensor(),                   # 将图像转换为 Tensor [1, 28, 28]
+    transforms.Lambda(lambda x: torch.flatten(x))]))  # 展平为一维 Tensor [784]]))
 batch_size = 100
 validation_split = .1
 shuffle_dataset = True
@@ -58,9 +60,10 @@ validation_loader = torch.utils.data.DataLoader(train_ds, batch_size=batch_size,
 
 test_loader = torch.utils.data.DataLoader(
     datasets.MNIST('data',train=False,download=True,
-      transform=transforms.Compose([transforms.ToTensor()])),batch_size=batch_size,shuffle=True)
+      transform=transforms.Compose([transforms.ToTensor(), transforms.Lambda(lambda x: torch.flatten(x))])),
+      batch_size=batch_size,shuffle=True)
 
-model = CnnNet()
+model = NnNet()
 optimizer = optim.SGD(model.parameters(),lr=0.01)
 criterion = nn.CrossEntropyLoss()
 
@@ -71,13 +74,15 @@ val_acc = []
 n_train = len(train_loader)*batch_size
 n_val = len(validation_loader)*batch_size
 
-for i in range(10):  # 假设进行10个epoch的训练
+epoch = 10
+
+for i in range(epoch):  # 假设进行10个epoch的训练
    total_loss = 0
    total_acc = 0  
    c = 0
     
    # 在训练数据加载器上加上tqdm包装器以显示进度
-   with tqdm(total=len(train_loader), desc=f'Epoch {i+1}/10 Training') as pbar:
+   with tqdm(total=len(train_loader), desc=f'Epoch {i+1}/{epoch} Training') as pbar:
       for images, labels in train_loader:
          # images = images.cuda()
          # labels = labels.cuda()
@@ -99,7 +104,7 @@ for i in range(10):  # 假设进行10个epoch的训练
    total_loss_val = 0
    total_acc_val = 0
    c = 0
-   with tqdm(total=len(validation_loader), desc=f'Epoch {i+1}/10 Validation') as pbar:
+   with tqdm(total=len(validation_loader), desc=f'Epoch {i+1}/{epoch} Validation') as pbar:
       for images, labels in validation_loader:
          # images = images.cuda()
          # labels = labels.cuda()
